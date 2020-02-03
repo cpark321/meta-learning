@@ -4,6 +4,8 @@ import torch.nn.functional as F
 import numpy as np
 import pdb
 import os
+import sys
+from datetime import datetime
 
 class Learner(nn.Module):
     def __init__(self, hidden_size, device):
@@ -45,7 +47,7 @@ def random_uniform(a, b):
 def sine_function(amp, phi, x):
     return amp*np.sin(x + phi)
 
-use_gpu = True
+use_gpu = False
 if use_gpu:
     device = 'cuda'
     os.environ["CUDA_VISIBLE_DEVICES"] = '0'
@@ -55,6 +57,9 @@ else:
 reg_learner = Learner(hidden_size=40, device=device)
 mse_criterion = nn.MSELoss(reduction='mean')
 
+savepath = "trained_models/reg_model_exp1.pt"
+print("savepath =", savepath)
+
 lr_b = 1e-2
 print("lr_beta = {:.2e}".format(lr_b))
 
@@ -63,8 +68,8 @@ optimizer.zero_grad()
 
 def regression_maml_exp():
     # hyperparameters
-    num_epochs = 10000
-    num_tasks  = 100
+    num_epochs = 50000
+    num_tasks  = 200
     num_points = 10 # K
     lr_a = 0.01
 
@@ -124,9 +129,14 @@ def regression_maml_exp():
         # 4. Backpropagation to update model's parameters
         meta_learning_loss /= num_tasks
         if epoch % 10 == 0:
-            print("epoch {}: meta_learning_loss = {:.3e}".format(epoch, meta_learning_loss))
+            print("[{}] epoch {}: meta_learning_loss = {:.3e}".format(str(datetime.now()), epoch, meta_learning_loss))
+            sys.stdout.flush()
+
         meta_learning_loss.backward()
         optimizer.step()
         optimizer.zero_grad()
+
+    print("finished maml training")
+    torch.save(reg_learner.state_dict(), savepath)
 
 regression_maml_exp()
