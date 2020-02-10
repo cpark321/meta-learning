@@ -14,13 +14,16 @@ class Learner(nn.Module):
         self.device = device
         self.N_way  = N_way
         self.conv1  = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3, stride=2, padding=0)
-        self.bnorm1 = nn.BatchNorm2d(num_features=64)
+        self.bnorm1 = nn.BatchNorm2d(num_features=64, track_running_stats=False)
+
         self.conv2  = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=2, padding=0)
-        self.bnorm2 = nn.BatchNorm2d(num_features=64)
+        self.bnorm2 = nn.BatchNorm2d(num_features=64, track_running_stats=False)
+
         self.conv3  = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=2, padding=0)
-        self.bnorm3 = nn.BatchNorm2d(num_features=64)
+        self.bnorm3 = nn.BatchNorm2d(num_features=64, track_running_stats=False)
+
         self.conv4  = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=2, stride=1, padding=0)
-        self.bnorm4 = nn.BatchNorm2d(num_features=64)
+        self.bnorm4 = nn.BatchNorm2d(num_features=64, track_running_stats=False)
 
         self.fc = nn.Linear(in_features=64, out_features=N_way, bias=True)
         self.logsoftmax = nn.LogSoftmax(dim=-1)
@@ -41,92 +44,54 @@ class Learner(nn.Module):
 
     def forward_fast_weights(self, x, grad, lr_a):
         # x = [batch_size, 1, 28, 28]
-        fast_weights = self.get_fast_weights(grad, lr_a)
-        conv1  = fast_weights['conv1']
-        bnorm1 = fast_weights['bnorm1']
-        conv2  = fast_weights['conv2']
-        bnorm2 = fast_weights['bnorm2']
-        conv3  = fast_weights['conv3']
-        bnorm3 = fast_weights['bnorm3']
-        conv4  = fast_weights['conv4']
-        bnorm4 = fast_weights['bnorm4']
-        fc     = fast_weights['fc']
 
-        z1 = F.relu(bnorm1(conv1(x)))
-        z2 = F.relu(bnorm2(conv2(z1)))
-        z3 = F.relu(bnorm3(conv3(z2)))
-        z4 = F.relu(bnorm4(conv4(z3)))
+        conv1_w  = self.conv1.weight  - lr_a * grad[0]
+        conv1_b  = self.conv1.bias    - lr_a * grad[1]
+        bnorm1_w = self.bnorm1.weight - lr_a * grad[2]
+        bnorm1_b = self.bnorm1.bias   - lr_a * grad[3]
+
+        conv2_w  = self.conv2.weight  - lr_a * grad[4]
+        conv2_b  = self.conv2.bias    - lr_a * grad[5]
+        bnorm2_w = self.bnorm2.weight - lr_a * grad[6]
+        bnorm2_b = self.bnorm2.bias   - lr_a * grad[7]
+
+        conv3_w  = self.conv3.weight  - lr_a * grad[8]
+        conv3_b  = self.conv3.bias    - lr_a * grad[9]
+        bnorm3_w = self.bnorm3.weight - lr_a * grad[10]
+        bnorm3_b = self.bnorm3.bias   - lr_a * grad[11]
+
+        conv4_w  = self.conv4.weight  - lr_a * grad[12]
+        conv4_b  = self.conv4.bias    - lr_a * grad[13]
+        bnorm4_w = self.bnorm4.weight - lr_a * grad[14]
+        bnorm4_b = self.bnorm4.bias   - lr_a * grad[15]
+
+        fc_w     = self.fc.weight     - lr_a * grad[16]
+        fc_b     = self.fc.bias       - lr_a * grad[17]
+
+        z1 = F.conv2d(x, conv1_w, conv1_b, stride=2, padding=0)
+        z1 = F.batch_norm(z1, running_mean=self.bnorm1.running_mean, running_var=self.bnorm1.running_var, weight=bnorm1_w, bias=bnorm1_b, training=True) # how about training=True??
+        z1 = F.relu(z1)
+
+        z2 = F.conv2d(z1, conv2_w, conv2_b, stride=2, padding=0)
+        z2 = F.batch_norm(z2, running_mean=self.bnorm2.running_mean, running_var=self.bnorm2.running_var, weight=bnorm2_w, bias=bnorm2_b, training=True) # how about training=True??
+        z2 = F.relu(z2)
+
+        z3 = F.conv2d(z2, conv3_w, conv3_b, stride=2, padding=0)
+        z3 = F.batch_norm(z3, running_mean=self.bnorm3.running_mean, running_var=self.bnorm3.running_var, weight=bnorm3_w, bias=bnorm3_b, training=True) # how about training=True??
+        z3 = F.relu(z3)
+
+        z4 = F.conv2d(z3, conv4_w, conv4_b, stride=1, padding=0)
+        z4 = F.batch_norm(z4, running_mean=self.bnorm4.running_mean, running_var=self.bnorm4.running_var, weight=bnorm4_w, bias=bnorm4_b, training=True) # how about training=True??
+        z4 = F.relu(z4)
 
         z4 = z4.view(-1, 64)
-        out = self.logsoftmax(fc(z4))
+        z4 = torch.matmul(z4, fc_w.T) + fc_b
+        out = F.log_softmax(z4, dim=-1)
         return out
 
-    def get_fast_weights(self, grad, lr_a):
-        conv1  = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3, stride=2, padding=0)
-        # conv1.weight.requires_grad = False
-        # conv1.bias.requires_grad   = False
-        conv1.weight.data = self.conv1.weight - lr_a*grad[0]
-        conv1.bias.data   = self.conv1.bias   - lr_a*grad[1]
-
-        bnorm1 = nn.BatchNorm2d(num_features=64)
-        # bnorm1.weight.requires_grad = False
-        # bnorm1.bias.requires_grad   = False
-        bnorm1.weight.data = self.bnorm1.weight - lr_a*grad[2]
-        bnorm1.bias.data   = self.bnorm1.bias   - lr_a*grad[3]
-
-        conv2  = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=2, padding=0)
-        # conv2.weight.requires_grad = False
-        # conv2.bias.requires_grad   = False
-        conv2.weight.data = self.conv2.weight - lr_a*grad[4]
-        conv2.bias.data   = self.conv2.bias   - lr_a*grad[5]
-
-        bnorm2 = nn.BatchNorm2d(num_features=64)
-        # bnorm2.weight.requires_grad = False
-        # bnorm2.bias.requires_grad   = False
-        bnorm2.weight.data = self.bnorm2.weight - lr_a*grad[6]
-        bnorm2.bias.data   = self.bnorm2.bias   - lr_a*grad[7]
-
-        conv3  = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=2, padding=0)
-        # conv3.weight.requires_grad = False
-        # conv3.bias.requires_grad   = False
-        conv3.weight.data = self.conv3.weight - lr_a*grad[8]
-        conv3.bias.data   = self.conv3.bias   - lr_a*grad[9]
-
-        bnorm3 = nn.BatchNorm2d(num_features=64)
-        # bnorm3.weight.requires_grad = False
-        # bnorm3.bias.requires_grad   = False
-        bnorm3.weight.data = self.bnorm3.weight - lr_a*grad[10]
-        bnorm3.bias.data   = self.bnorm3.bias   - lr_a*grad[11]
-
-        conv4  = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=2, stride=1, padding=0)
-        # conv4.weight.requires_grad = False
-        # conv4.bias.requires_grad   = False
-        conv4.weight.data = self.conv4.weight - lr_a*grad[12]
-        conv4.bias.data   = self.conv4.bias   - lr_a*grad[13]
-
-        bnorm4 = nn.BatchNorm2d(num_features=64)
-        # bnorm4.weight.requires_grad = False
-        # bnorm4.bias.requires_grad   = False
-        bnorm4.weight.data = self.bnorm4.weight - lr_a*grad[14]
-        bnorm4.bias.data   = self.bnorm4.bias   - lr_a*grad[15]
-
-        fc = nn.Linear(in_features=64, out_features=self.N_way, bias=True)
-        # fc.weight.requires_grad = False
-        # fc.bias.requires_grad   = False
-        fc.weight.data = self.fc.weight - lr_a*grad[16]
-        fc.bias.data   = self.fc.bias   - lr_a*grad[17]
-
-        fast_weights = {
-            'conv1': conv1, 'bnorm1': bnorm1,
-            'conv2': conv2, 'bnorm2': bnorm2,
-            'conv3': conv3, 'bnorm3': bnorm3,
-            'conv4': conv4, 'bnorm4': bnorm4,
-            'fc': fc
-        }
-        return fast_weights
 
 # --------------------- Experiment setting --------------------- #
-use_gpu = False # set to False if there is no GPU available
+use_gpu = True # set to False if there is no GPU available
 if use_gpu:
     device = 'cuda'
     os.environ["CUDA_VISIBLE_DEVICES"] = '0'
@@ -139,7 +104,7 @@ criterion = nn.NLLLoss(reduction='mean')
 savepath = "trained_models/omniglot_model_exp0.pt"
 print("savepath =", savepath)
 
-lr_b = 0.4
+lr_b = 1e-2
 print("lr_beta = {:.2e}".format(lr_b))
 
 optimizer = torch.optim.Adam(omniglot_learner.parameters(), lr=lr_b, betas=(0.9,0.999), eps=1e-08, weight_decay=0)
@@ -172,8 +137,9 @@ def omniglot_maml_exp():
             tasks[_i] = np.random.randint(low=0, high=1200, size=num_tasks)
 
         # 2. for each task Ti
-        valid_data = []
-        gradients  = []
+        # valid_data = []
+        # gradients  = []
+        meta_learning_loss = 0
         for task in tasks:
             X_batch_a = np.zeros((batch_size, 28, 28))
             Y_batch_a = np.zeros((batch_size))
@@ -183,16 +149,16 @@ def omniglot_maml_exp():
             # 2.1 sample K datapoints from Ti
             # 2.3 sample K datapoints from Ti --- for meta-update step
             for j1, char_id in enumerate(task):
-                instances = np.random.randint(low=0, high=20, size=num_tasks*2)
-                for j2, ins in enumerate(instances[:num_tasks]):
-                    X_batch_a[j1*num_tasks+j2,:,:] = X_train[char_id,ins,:,:]
-                    Y_batch_a[j1*num_tasks+j2] = j1
+                instances = np.random.randint(low=0, high=20, size=num_points)
+                for j2, ins in enumerate(instances):
+                    X_batch_a[j1*num_points+j2,:,:] = X_train[char_id,ins,:,:]
+                    Y_batch_a[j1*num_points+j2] = j1
+                instances = np.random.randint(low=0, high=20, size=num_points)
+                for j2, ins in enumerate(instances):
+                    X_batch_b[j1*num_points+j2,:,:] = X_train[char_id,ins,:,:]
+                    Y_batch_b[j1*num_points+j2] = j1
 
-                for j2, ins in enumerate(instances[num_tasks:]):
-                    X_batch_b[j1*num_tasks+j2,:,:] = X_train[char_id,ins,:,:]
-                    Y_batch_b[j1*num_tasks+j2] = j1
-
-            valid_data.append((X_batch_b, Y_batch_b))
+            # valid_data.append((X_batch_b, Y_batch_b))
 
             # 2.2 compute gradient
             X_batch_a = torch.tensor(X_batch_a, dtype=torch.float32).unsqueeze(1).to(device)
@@ -201,26 +167,29 @@ def omniglot_maml_exp():
 
             train_loss = criterion(Y_pred, Y_batch_a)
 
-            grad = torch.autograd.grad(train_loss, omniglot_learner.parameters())
-            gradients.append(grad)
+            grad = torch.autograd.grad(train_loss, omniglot_learner.parameters(), create_graph=True)
+            # pdb.set_trace()
 
-        # 3. meta-update step
-        meta_learning_loss = 0
-        for i in range(metabatch_size):
-            X_batch_b, Y_batch_b = valid_data[i]
-            grad = gradients[i]
+            # gradients.append(grad)
+
+            # 3. meta-update step
+            # for i in range(metabatch_size):
+                # X_batch_b, Y_batch_b = valid_data[i]
+                # grad = gradients[i]
 
             X_batch_b = torch.tensor(X_batch_b, dtype=torch.float32).unsqueeze(1).to(device)
             Y_batch_b = torch.tensor(Y_batch_b, dtype=torch.long).to(device)
 
             Y_pred = omniglot_learner.forward_fast_weights(X_batch_b, grad, lr_a)
-            meta_learning_loss += criterion(Y_pred, Y_batch_b)
-            # print(i, meta_learning_loss)
+            meta_loss = criterion(Y_pred, Y_batch_b)
+            meta_learning_loss += meta_loss
+            # print("train_loss: {:.3f}, meta_loss: {:.3f}".format(train_loss, meta_loss))
+            # pdb.set_trace()
 
         # 4. Backpropagation to update model's parameters
         meta_learning_loss /= num_tasks
         if iter % 10 == 0:
-            print("[{}] iteration {}: meta_learning_loss = {:.3e}".format(str(datetime.now()), iter, meta_learning_loss))
+            print("[{}] iteration {}: meta_learning_loss = {:.5f}".format(str(datetime.now()), iter, meta_learning_loss))
             sys.stdout.flush()
 
         meta_learning_loss.backward()
@@ -228,7 +197,9 @@ def omniglot_maml_exp():
         optimizer.zero_grad()
 
 
+
+
     print("finished maml training")
-    torch.save(reg_learner.state_dict(), savepath)
+    torch.save(omniglot_learner.state_dict(), savepath)
 
 omniglot_maml_exp()
