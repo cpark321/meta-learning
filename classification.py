@@ -28,8 +28,7 @@ print("device = {}".format(device))
 
 omniglot_learner = LearnerConv(N_way=20, device=device)
 print(omniglot_learner)
-savepath = "trained_models/omniglot_model_n20_k1_new.pt"
-print("savepath =", savepath)
+
 
 lr_b = 1e-2
 print("lr_beta = {:.2e}".format(lr_b))
@@ -64,7 +63,8 @@ def omniglot_maml_exp():
     print("N={}".format(num_tasks))
     print("K={}".format(num_points))
     print("metabatch_size={}".format(metabatch_size))
-    print("lr_a={}".format(0.4))
+    print("lr_a={}".format(lr_a))
+    print("num_grad_update={}".format(num_grad_update))
 
     for iter in range(num_iterations):
         # 1. sample batch of tasks Ti ~ p(T)
@@ -128,8 +128,11 @@ def omniglot_maml_exp():
         optimizer.step()
         optimizer.zero_grad()
 
+        if iter % 5000 == 0:
+            savepath = "trained_models/omniglot_24feb_n{}_k{}_iter{}.pt".format(num_tasks, num_points, iter)
+            print("saving a model at", savepath)
+            torch.save(omniglot_learner.state_dict(), savepath)
 
     print("finished maml training")
-    torch.save(omniglot_learner.state_dict(), savepath)
 
 omniglot_maml_exp()
