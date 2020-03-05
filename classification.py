@@ -20,17 +20,17 @@ if use_gpu:
     else:
         # pdb.set_trace()
         print('running locally...')
-        os.environ["CUDA_VISIBLE_DEVICES"] = '0' # choose the device (GPU) here
+        os.environ["CUDA_VISIBLE_DEVICES"] = '3' # choose the device (GPU) here
     device = 'cuda'
 else:
     device = 'cpu'
 print("device = {}".format(device))
 
-omniglot_learner = LearnerConv(N_way=20, device=device)
+omniglot_learner = LearnerConv(N_way=5, device=device)
 print(omniglot_learner)
 
 
-lr_b = 1e-2
+lr_b = 1e-4 # not 1e-2!!
 print("lr_beta = {:.2e}".format(lr_b))
 
 criterion = nn.NLLLoss(reduction='mean')
@@ -51,14 +51,14 @@ X_test  = X_data[1200:,:,:,:]
 def omniglot_maml_exp():
     # hyperparameters
     num_iterations  = 60000
-    num_tasks       = 20 # N
+    num_tasks       = 5 # N
     num_points      = 5 # K
     batch_size      = num_tasks*num_points
-    metabatch_size  = 16 # 32 tasks --- the number of tasks sampled per meta-update
+    metabatch_size  = 32 # 32 tasks --- the number of tasks sampled per meta-update
                          #          --- each task is an N-way, K-shot classification problem
-    lr_a = 0.1
+    lr_a = 0.4
 
-    num_grad_update = 5
+    num_grad_update = 1
 
     print("N={}".format(num_tasks))
     print("K={}".format(num_points))
@@ -79,23 +79,21 @@ def omniglot_maml_exp():
             # copy current model weights to fast_weights
             fast_weights = omniglot_learner.copy_model_weights()
 
+            X_batch_a = np.zeros((batch_size, 28, 28))
+            Y_batch_a = np.zeros((batch_size))
+            X_batch_b = np.zeros((batch_size, 28, 28))
+            Y_batch_b = np.zeros((batch_size))
+
+            # 2.1 sample K datapoints from Ti
+            for j1, char_id in enumerate(task):
+                instances = np.random.randint(low=0, high=20, size=num_points)
+                for j2, ins in enumerate(instances):
+                    X_batch_a[j1*num_points+j2,:,:] = X_train[char_id,ins,:,:]
+                    Y_batch_a[j1*num_points+j2] = j1
+            X_batch_a = torch.tensor(X_batch_a, dtype=torch.float32).unsqueeze(1).to(device)
+            Y_batch_a = torch.tensor(Y_batch_a, dtype=torch.long).to(device)
+            # 2.2 compute gradient (multiple steps)
             for grad_update_iter in range(num_grad_update):
-                X_batch_a = np.zeros((batch_size, 28, 28))
-                Y_batch_a = np.zeros((batch_size))
-                X_batch_b = np.zeros((batch_size, 28, 28))
-                Y_batch_b = np.zeros((batch_size))
-
-                # 2.1 sample K datapoints from Ti
-                for j1, char_id in enumerate(task):
-                    instances = np.random.randint(low=0, high=20, size=num_points)
-                    for j2, ins in enumerate(instances):
-                        X_batch_a[j1*num_points+j2,:,:] = X_train[char_id,ins,:,:]
-                        Y_batch_a[j1*num_points+j2] = j1
-
-                # 2.2 compute gradient
-                X_batch_a = torch.tensor(X_batch_a, dtype=torch.float32).unsqueeze(1).to(device)
-                Y_batch_a = torch.tensor(Y_batch_a, dtype=torch.long).to(device)
-
                 Y_pred = omniglot_learner.forward_fast_weights(X_batch_a, fast_weights)
                 train_loss = criterion(Y_pred, Y_batch_a)
                 # print(train_loss)
@@ -129,9 +127,13 @@ def omniglot_maml_exp():
         optimizer.zero_grad()
 
         if iter % 5000 == 0:
-            savepath = "trained_models/omniglot_24feb_n{}_k{}_iter{}.pt".format(num_tasks, num_points, iter)
+            savepath = "trained_models/omniglot_4marchv2_n{}_k{}_iter{}.pt".format(num_tasks, num_points, iter)
             print("saving a model at", savepath)
             torch.save(omniglot_learner.state_dict(), savepath)
+
+    savepath = "trained_models/omniglot_4marchv2_n{}_k{}_final.pt".format(num_tasks, num_points)
+    print("saving a model at", savepath)
+    torch.save(omniglot_learner.state_dict(), savepath)
 
     print("finished maml training")
 
