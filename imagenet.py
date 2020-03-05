@@ -20,7 +20,7 @@ if use_gpu:
     else:
         # pdb.set_trace()
         print('running locally...')
-        os.environ["CUDA_VISIBLE_DEVICES"] = '1' # choose the device (GPU) here
+        os.environ["CUDA_VISIBLE_DEVICES"] = '0' # choose the device (GPU) here
     device = 'cuda'
 else:
     device = 'cpu'
@@ -30,7 +30,7 @@ imagenet_learner = LearnerConv(N_way=5, device=device)
 print(imagenet_learner)
 
 
-lr_b = 1e-2
+lr_b = 1e-4 # not 1e-2!!
 print("lr_beta = {:.2e}".format(lr_b))
 
 criterion = nn.NLLLoss(reduction='mean')
@@ -131,11 +131,11 @@ def imagenet_maml_exp():
         optimizer.zero_grad()
 
         if iter % 5000 == 0:
-            savepath = "trained_models/imagenet_3march_n{}_k{}_iter{}.pt".format(num_tasks, num_points, iter)
+            savepath = "trained_models/imagenet_4marchv2_n{}_k{}_iter{}.pt".format(num_tasks, num_points, iter)
             print("saving a model at", savepath)
             torch.save(imagenet_learner.state_dict(), savepath)
 
-    savepath = "trained_models/imagenet_3march_n{}_k{}_final.pt".format(num_tasks, num_points)
+    savepath = "trained_models/imagenet_4marchv2_n{}_k{}_final.pt".format(num_tasks, num_points)
     print("saving a model at", savepath)
     torch.save(imagenet_learner.state_dict(), savepath)
 
