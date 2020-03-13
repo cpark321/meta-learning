@@ -61,6 +61,9 @@ def regression_maml_exp():
     reg_learner = Learner(hidden_size=40, device=device)
     mse_criterion = nn.MSELoss(reduction='mean')
 
+    savepath = "trained_models/reg_6march_pretrain.pt"
+    print("savepath =", savepath)
+
     lr_b = 1e-2
     print("lr_beta = {:.2e}".format(lr_b))
 
@@ -68,83 +71,40 @@ def regression_maml_exp():
     optimizer.zero_grad()
 
     # hyperparameters
-    num_epochs = 200000
+    num_epochs = 50000
     num_tasks  = 200
-    num_points = 10 # K
-    lr_a = 0.01
+    num_points = 10
 
     for epoch in range(num_epochs):
-        # 1. sample batch of tasks Ti ~ p(T)
-        tasks     = []
-        for i in range(num_tasks):
-            amplitude = random_uniform(0.1, 5.0)
-            phase     = random_uniform(0, np.pi)
-            tasks.append((amplitude, phase))
+        for task in range(num_tasks):
+            # 1. sample amplitude & phase
+            amp = random_uniform(0.1, 5.0)
+            phi     = random_uniform(0, np.pi)
 
-        # 2. for each task Ti
-        valid_data = []
-        gradients  = []
-        for task in tasks:
-            # 2.1 sample K datapoints from Ti
-            amp = task[0]
-            phi = task[1]
             X = [None for _ in range(num_points)]
             Y = [None for _ in range(num_points)]
             for j in range(num_points):
                 X[j] = random_uniform(-5.0, 5.0)
                 Y[j] = sine_function(amp, phi, X[j])
-            # 2.2 compute gradient
+
+            # 2. compute gradient & do backprop
             Xtrain = torch.tensor(X).unsqueeze(-1).to(device)
             Ytrain = torch.tensor(Y).unsqueeze(-1).to(device)
             Ypred = reg_learner(Xtrain)
             mse_loss = mse_criterion(Ypred, Ytrain)
+            mse_loss /= num_tasks
+            mse_loss.backward()
 
-            grad = torch.autograd.grad(mse_loss, reg_learner.parameters())
-            gradients.append(grad)
-
-            # 2.3 sample validation datapoints for this task
-            Xi_val = [None for _ in range(num_points)]
-            Yi_val = [None for _ in range(num_points)]
-            for j in range(num_points):
-                Xi_val[j] = random_uniform(-5.0, 5.0)
-                Yi_val[j] = sine_function(amp, phi, Xi_val[j])
-            valid_data.append((Xi_val, Yi_val))
-
-        # 3. meta-update step
-        meta_learning_loss = 0
-        for i in range(len(tasks)):
-            Xi_val, Yi_val = valid_data[i]
-            grad = gradients[i]
-            fast_params = {
-                'w1': reg_learner.w1 - lr_a*grad[0], 'b1': reg_learner.b1 - lr_a*grad[1],
-                'w2': reg_learner.w2 - lr_a*grad[2], 'b2': reg_learner.b2 - lr_a*grad[3],
-                'w3': reg_learner.w3 - lr_a*grad[4], 'b3': reg_learner.b3 - lr_a*grad[5],
-            }
-            Xmeta = torch.tensor(Xi_val).unsqueeze(-1).to(device)
-            Ymeta = torch.tensor(Yi_val).unsqueeze(-1).to(device)
-            Ypred = reg_learner.forward_adapted_params(Xmeta, fast_params)
-            meta_learning_loss += mse_criterion(Ypred, Ymeta)
-            # print(i, meta_learning_loss)
-
-        # 4. Backpropagation to update model's parameters
-        meta_learning_loss /= num_tasks
+        # 3. Update model's parameters
         if epoch % 10 == 0:
-            print("[{}] epoch {}: meta_learning_loss = {:.3e}".format(str(datetime.now()), epoch, meta_learning_loss))
+            print("[{}] epoch {}: mse_loss = {:.3e}".format(str(datetime.now()), epoch, mse_loss))
             sys.stdout.flush()
 
-        meta_learning_loss.backward()
         optimizer.step()
         optimizer.zero_grad()
 
-        if epoch % 10000 == 0:
-            savepath = "trained_models/reg_6march_maml_ep{}.pt".format(epoch)
-            print("saving a model at", savepath)
-            torch.save(reg_learner.state_dict(), savepath)
-
-    savepath = "trained_models/reg_6march_maml_final.pt"
-    print("saving a model at", savepath)
+    print("finished pre-training")
     torch.save(reg_learner.state_dict(), savepath)
-
 
 if __name__ == "__main__":
     regression_maml_exp()
