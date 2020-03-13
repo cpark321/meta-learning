@@ -14,13 +14,13 @@ from models.miniimagenet import LearnerConv
 use_gpu = True # set to False if there is no GPU available
 if use_gpu:
     device = 'cuda'
-    os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 else:
     device = 'cpu'
 
 imagenet_learner = LearnerConv(N_way=5, device=device)
 
-loadpath = "trained_models/imagenet_4march_n5_k1_final.pt"
+loadpath = "trained_models/imagenet_approx_5march_n5_k5_final.pt"
 print("loadpath =", loadpath)
 imagenet_learner.load_state_dict(torch.load(loadpath))
 imagenet_learner.eval()
@@ -32,14 +32,14 @@ X_test = np.transpose(X_test, (0,1,4,3,2))
 
 
 X_test = np.transpose(X_test, (1,0,2,3,4))
-X_test = shuffle(X_test, random_state=95)
+X_test = shuffle(X_test, random_state=4)
 X_test = np.transpose(X_test, (1,0,2,3,4))
 
 # --------------------- MAML MiniImageNet experiment --------------------- #
 def miniimagenet_maml_exp_eval():
     # hyperparameters
     num_tasks       = 5 # N
-    num_points      = 1  # K
+    num_points      = 5  # K
     num_grad_update = 10  # for evaluation
     batch_size      = num_tasks*num_points
     lr_a            = 0.01

@@ -56,9 +56,9 @@ def imagenet_maml_exp():
     # hyperparameters
     num_iterations  = 60000
     num_tasks       = 5 # N
-    num_points      = 1 # K
+    num_points      = 5 # K
     batch_size      = num_tasks*num_points
-    metabatch_size  = 4  # 4 for 1-shot & 2 for 5-shot
+    metabatch_size  = 2  # 4 for 1-shot & 2 for 5-shot
 
     eval_num_points = 15
     eval_batch_size = num_tasks*eval_num_points
@@ -131,11 +131,11 @@ def imagenet_maml_exp():
         optimizer.zero_grad()
 
         if iter % 5000 == 0:
-            savepath = "trained_models/imagenet_4marchv2_n{}_k{}_iter{}.pt".format(num_tasks, num_points, iter)
+            savepath = "trained_models/imagenet_5marchv2_n{}_k{}_iter{}.pt".format(num_tasks, num_points, iter)
             print("saving a model at", savepath)
             torch.save(imagenet_learner.state_dict(), savepath)
 
-    savepath = "trained_models/imagenet_4marchv2_n{}_k{}_final.pt".format(num_tasks, num_points)
+    savepath = "trained_models/imagenet_5marchv2_n{}_k{}_final.pt".format(num_tasks, num_points)
     print("saving a model at", savepath)
     torch.save(imagenet_learner.state_dict(), savepath)
 
