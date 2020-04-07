@@ -6,47 +6,8 @@ import os
 import sys
 from datetime import datetime
 
-# ---------------- Learner class definition ----------------- #
-class Learner(nn.Module):
-    def __init__(self, hidden_size, device):
-        super(Learner, self).__init__()
-        self.device = device
-
-        self.w1 = nn.Parameter(torch.randn(hidden_size, 1), requires_grad=True)
-        self.b1 = nn.Parameter(torch.zeros(1, hidden_size), requires_grad=True)
-        self.w2 = nn.Parameter(torch.randn(hidden_size, hidden_size), requires_grad=True)
-        self.b2 = nn.Parameter(torch.zeros(1, hidden_size), requires_grad=True)
-        self.w3 = nn.Parameter(torch.randn(1, hidden_size), requires_grad=True)
-        self.b3 = nn.Parameter(torch.zeros(1, 1), requires_grad=True)
-
-        self.to(device)
-
-    def forward(self, x):
-        # x is a one-dimension input [batch_size, 1]
-        # note that the author also add normalisation layer...
-        z1 = F.relu(torch.matmul(x,self.w1.T) + self.b1)
-        z2 = F.relu(torch.matmul(z1,self.w2.T) + self.b2)
-        z3 = torch.matmul(z2,self.w3.T) + self.b3
-        return z3
-
-    def forward_adapted_params(self, x, params):
-        w1 = params['w1']
-        b1 = params['b1']
-        w2 = params['w2']
-        b2 = params['b2']
-        w3 = params['w3']
-        b3 = params['b3']
-
-        z1 = F.relu(torch.matmul(x,w1.T) + b1)
-        z2 = F.relu(torch.matmul(z1,w2.T) + b2)
-        z3 = torch.matmul(z2,w3.T) + b3
-        return z3
-
-# --------------------- Helper Functions --------------------- #
-def random_uniform(a, b):
-    return (b - a)*np.random.random_sample() + a
-def sine_function(amp, phi, x):
-    return amp*np.sin(x + phi)
+from models import RegressionLearner as Learner
+from utils import random_uniform, sine_function
 
 # --------------------- MAML Regression experiment --------------------- #
 def regression_maml_exp():
@@ -61,19 +22,22 @@ def regression_maml_exp():
     reg_learner = Learner(hidden_size=40, device=device)
     mse_criterion = nn.MSELoss(reduction='mean')
 
-    savepath = "trained_models/reg_6march_pretrain.pt"
+    save_dir = "./trained_models/"
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    savepath = os.path.join(save_dir, 'regression_pretrain.pth')
     print("savepath =", savepath)
 
-    lr_b = 1e-2
+    lr_b = 5e-3
     print("lr_beta = {:.2e}".format(lr_b))
 
     optimizer = torch.optim.Adam(reg_learner.parameters(), lr=lr_b, betas=(0.9,0.999), eps=1e-08, weight_decay=0)
     optimizer.zero_grad()
 
     # hyperparameters
-    num_epochs = 50000
+    num_epochs = 100000
     num_tasks  = 200
-    num_points = 10
+    num_points = 5
 
     for epoch in range(num_epochs):
         for task in range(num_tasks):
@@ -96,10 +60,10 @@ def regression_maml_exp():
             mse_loss.backward()
 
         # 3. Update model's parameters
-        if epoch % 10 == 0:
-            print("[{}] epoch {}: mse_loss = {:.3e}".format(str(datetime.now()), epoch, mse_loss))
-            sys.stdout.flush()
-
+        if epoch % 1000 == 0:
+            with open('./trained_models/reg_pretrain_results.txt', 'a') as f:
+                f.write("[{}] epoch {}: meta_learning_loss = {:.3e}".format(str(datetime.now()), epoch, mse_loss))
+                
         optimizer.step()
         optimizer.zero_grad()
 
