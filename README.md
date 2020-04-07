@@ -8,6 +8,13 @@
   - PyTorch 1.3
   - Codes are inspired by [https://towardsdatascience.com], [https://github.com/potsawee/]
 
+### Pretrain model with multi-tasks
+* Run the following command.
+```
+python regression_maml.py  # for meta-training
+python regression_pretrain.py  # for normal transfer learning
+```
+
 ### Reference
 1. [Model-Agnostic Meta-Learning for Fast Adaptation of Deep Networks]
 2. [How to train your MAML]
