@@ -11,7 +11,7 @@ import sys
 import matplotlib.pyplot as plt
 from omniglotDataset import OmniglotDataset
 
-from models.omniglot import LearnerConv
+from models import LearnerConv
 
 import argparse
 
