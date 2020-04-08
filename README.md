@@ -11,8 +11,12 @@
 ### Pretrain model with multi-tasks
 * Run the following command.
 ```
+# sine regression
 python regression_maml.py  # for meta-training
 python regression_pretrain.py  # for normal transfer learning
+
+# omniglot
+python omniglotTrain.py -n 5 -k 1 -c 0 --no_iter 50000 --lr 0.1
 ```
 
 ### Reference
