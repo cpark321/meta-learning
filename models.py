@@ -133,4 +133,114 @@ class LearnerConv(nn.Module):
         z4 = torch.matmul(z4, fc_w.T) + fc_b
         out = F.log_softmax(z4, dim=-1)
         return out
+
     
+class MVTecLearner(nn.Module):
+    def __init__(self, device):
+        super(MVTecLearner, self).__init__()
+        self.device = device
+        self.N_way  = 2
+
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=5, stride=2)
+        self.bnorm1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32,64,kernel_size=5)
+        self.bnorm2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64, 128, 5)
+        self.bnorm3 = nn.BatchNorm2d(128)
+        self.conv4 = nn.Conv2d(128, 256, 3)
+        self.bnorm4 = nn.BatchNorm2d(256)
+        self.pool = nn.MaxPool2d(2)
+        self.relu = nn.ReLU()
+
+        self.fc1 = nn.Linear(256*5*5, 128)
+#         self.bn_fc1 = nn.BatchNorm1d(128)
+        self.fc2 = nn.Linear(128, 1)
+        self.sigmoid = nn.Sigmoid()
+        
+        self.to(device)
+
+    def copy_model_weights(self):
+        fast_weights = []
+        for pr in self.parameters():
+            fast_weights.append(pr.clone())
+        return fast_weights
+
+    def update_fast_grad(self, fast_params, grad, lr_a):
+        if len(fast_params) != len(grad): raise ValueError("fast grad update error")
+        num = len(grad)
+        updated_fast_params = [None for _ in range(num)]
+        for i in range(num):
+            updated_fast_params[i] = fast_params[i] - lr_a * grad[i]
+        return updated_fast_params
+
+    def forward(self, x):
+        # x = [batch_size, 1, 28, 28]
+
+        x = self.pool(self.relu(self.bn1(self.conv1(x))))
+        x = self.pool(self.relu(self.bn2(self.conv2(x))))
+        x = self.pool(self.relu(self.bn3(self.conv3(x))))
+        x = self.pool(self.relu(self.bn4(self.conv4(x))))
+
+        x = x.view(-1, 256*5*5)
+#         x = self.relu(self.bn_fc1(self.fc1(x)))
+        x = self.relu((self.fc1(x)))
+        x = self.sigmoid(self.fc2(x))
+
+        return out
+
+    def forward_fast_weights(self, x, fast_weights):
+        # x = [batch_size, 1, 28, 28]
+
+        conv1_w  = fast_weights[0]
+        conv1_b  = fast_weights[1]
+        bnorm1_w = fast_weights[2]
+        bnorm1_b = fast_weights[3]
+
+        conv2_w  = fast_weights[4]
+        conv2_b  = fast_weights[5]
+        bnorm2_w = fast_weights[6]
+        bnorm2_b = fast_weights[7]
+
+        conv3_w  = fast_weights[8]
+        conv3_b  = fast_weights[9]
+        bnorm3_w = fast_weights[10]
+        bnorm3_b = fast_weights[11]
+
+        conv4_w  = fast_weights[12]
+        conv4_b  = fast_weights[13]
+        bnorm4_w = fast_weights[14]
+        bnorm4_b = fast_weights[15]
+
+        fc1_w     = fast_weights[16]
+        fc1_b     = fast_weights[17]
+        fc2_w     = fast_weights[18]
+        fc2_b     = fast_weights[19]
+        
+        x = F.conv2d(x, conv1_w, conv1_b, stride=2, padding=0)
+        x = F.batch_norm(x, running_mean=self.bnorm1.running_mean, running_var=self.bnorm1.running_var, weight=bnorm1_w, bias=bnorm1_b, training=True) # how about training=True??
+        x = F.relu(x)
+        x = self.pool(x)
+        
+        
+        x = F.conv2d(x, conv2_w, conv2_b, stride=1, padding=0)
+        x = F.batch_norm(x, running_mean=self.bnorm2.running_mean, running_var=self.bnorm2.running_var, weight=bnorm2_w, bias=bnorm2_b, training=True) # how about training=True??
+        x = F.relu(x)
+        x = self.pool(x)
+        
+        x = F.conv2d(x, conv3_w, conv3_b, stride=1, padding=0)
+        x = F.batch_norm(x, running_mean=self.bnorm3.running_mean, running_var=self.bnorm3.running_var, weight=bnorm3_w, bias=bnorm3_b, training=True) # how about training=True??
+        x = F.relu(x)
+        x = self.pool(x)
+        
+        x = F.conv2d(x, conv4_w, conv4_b, stride=1, padding=0)
+        x = F.batch_norm(x, running_mean=self.bnorm4.running_mean, running_var=self.bnorm4.running_var, weight=bnorm4_w, bias=bnorm4_b, training=True) # how about training=True??
+        x = F.relu(x)
+        x = self.pool(x)
+        
+        x = x.view(-1, 256*5*5)
+        x = torch.matmul(x, fc1_w.T) + fc1_b
+        x = torch.matmul(x, fc2_w.T) + fc2_b
+                      
+        out = torch.sigmoid(x)
+
+        return out
