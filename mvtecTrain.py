@@ -139,6 +139,8 @@ def criterion(x, y):
 optimizer = torch.optim.Adam(mvtec_learner.parameters(), lr=lr_b, betas=(0.9,0.999), eps=1e-08, weight_decay=0)
 optimizer.zero_grad()
 
+min_loss = np.inf
+
 for epoch in range(num_iterations):
 
     # 2. for each 14 other tasks, Ti
@@ -189,13 +191,13 @@ for epoch in range(num_iterations):
     optimizer.step()
     optimizer.zero_grad()
     
-    if epoch % 500==0:
+    if epoch % 100==0:
         with open(os.path.join(save_path, f'training-log-target-{target_class}-lr{lr_a}.txt'), 'a') as f:
             f.write("[{}] iter {}: meta_learning_loss = {:.3e}\n".format(str(datetime.now()), epoch, meta_learning_loss))
-
-savepath = os.path.join(save_path, "mvtec_target{}_n{}_k{}_lr{}_final.pth".format(target_class, num_tasks, num_points, lr_a))
-torch.save(omniglot_learner.state_dict(), savepath)
-print("saving a model at", savepath)
+        if meta_learning_loss.item() < min_loss:
+            min_loss = meta_learning_loss.item()
+            savepath = os.path.join(save_path, "mvtec_target{}_n{}_k{}_lr{}_final.pth".format(target_class, num_tasks, num_points, lr_a))
+            torch.save(mvtec_learner.state_dict(), savepath)
 
 print("finished maml training")
 
